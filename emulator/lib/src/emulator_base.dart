@@ -1,6 +1,9 @@
-// TODO: Put public facing types in this file.
+export 'io/cartridge_reader.dart';
 
-/// Checks if you are awesome. Spoiler: you are.
-class Awesome {
-  bool get isAwesome => true;
+import 'package:emulator/src/io/cartridge_reader.dart';
+
+class Emulator {
+  Emulator(String romPath) {
+    CartridgeReader().read(romPath);
+  }
 }
