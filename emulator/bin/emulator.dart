@@ -9,6 +9,6 @@ void main(List<String> args) {
 
 ArgResults parseArgs(List<String> args) {
   var parser = ArgParser();
-  parser.addOption('rom_path');
+  parser.addOption('rom_path', mandatory: true);
   return parser.parse(args);
 }

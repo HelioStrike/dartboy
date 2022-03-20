@@ -25,50 +25,52 @@ enum Flag {
   c,
 }
 
-class Registers {
-  Registers() {
-    reset();
-  }
+extension RegisterExtension on Register {
+  static final Map<Register, int> _values = {
+    for (var register in Register.values) register: 0
+  };
 
-  final Map<Register, int> _registers = {};
-
-  int getRegister(Register register) {
-    switch (register) {
+  int get value {
+    switch (this) {
       case Register.BC:
-        return (_registers[Register.B]! << 8) | _registers[Register.C]!;
+        return (_values[Register.B]! << 8) | _values[Register.C]!;
       case Register.DE:
-        return (_registers[Register.D]! << 8) | _registers[Register.E]!;
+        return (_values[Register.D]! << 8) | _values[Register.E]!;
       case Register.HL:
-        return (_registers[Register.H]! << 8) | _registers[Register.L]!;
+        return (_values[Register.H]! << 8) | _values[Register.L]!;
       default:
-        return _registers[register]!;
+        return _values[this]!;
     }
   }
 
-  int setRegister(Register register, int value) {
-    switch (register) {
+  set value(int val) {
+    switch (this) {
       case Register.BC:
-        return (_registers[Register.B]! << 8) | _registers[Register.C]!;
+        _values[Register.B] = val >> 8;
+        _values[Register.C] = val & 255;
+        break;
       case Register.DE:
-        return (_registers[Register.D]! << 8) | _registers[Register.E]!;
+        _values[Register.D] = val >> 8;
+        _values[Register.E] = val & 255;
+        break;
       case Register.HL:
-        return (_registers[Register.H]! << 8) | _registers[Register.L]!;
+        _values[Register.H] = val >> 8;
+        _values[Register.L] = val & 255;
+        break;
       default:
-        return _registers[register]!;
+        _values[this] = val;
     }
   }
 
-  bool getFlag(Flag flag) {
-    return (_registers[Register.F]! & (1 << (8 - flag.index))) > 0;
-  }
-
-  void setFlag(Flag flag) {
-    _registers[Register.F] = _registers[Register.F]! | (1 << (8 - flag.index));
-  }
-
-  void reset() {
+  static void reset() {
     for (var register in Register.values) {
-      _registers[register] = 0;
+      _values[register] = 0;
     }
+  }
+}
+
+extension FlagExtension on Flag {
+  bool get value {
+    return (Register.F.value & (1 << (8 - index))) > 0;
   }
 }
