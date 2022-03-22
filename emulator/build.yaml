@@ -1,0 +1,17 @@
+targets:
+  $default:
+    sources: ["lib/src/cpu/instructions.dart"]
+    builders:
+      emulator|gbops_builder:
+        options:
+          enabled: true
+
+builders:
+  gbops_builder:
+    target: ":emulator"
+    import: "package:emulator/codegen/gbops_builder.dart"
+    builder_factories: ["gbOpsBuilder"]
+    build_extensions: { ".dart": [".gbops.g.part"] }
+    auto_apply: dependents
+    build_to: cache
+    applies_builders: ["source_gen|combining_builder"]

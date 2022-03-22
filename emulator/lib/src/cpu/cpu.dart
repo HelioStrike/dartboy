@@ -18,13 +18,22 @@ class CPU {
     }
   }
 
+  /// Returns the instruction pointed to by the program counter (PC).
   void executeCurrentInstruction() {
-    final inst = cartridge.getByte(Register.PC.value);
+    final inst = getNextByte();
 
     if (Instructions.opcodeToFunction[inst] != null) {
       Instructions.opcodeToFunction[inst]!();
     } else {
       throw 'Unknown instruction: $inst';
     }
+  }
+
+  /// Returns the byte pointed to by the Program Counter (PC),
+  /// and increments PC.
+  int getNextByte() {
+    final ret = cartridge.getByte(Register.PC.value);
+    Register.PC.value++;
+    return ret;
   }
 }
