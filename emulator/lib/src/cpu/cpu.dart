@@ -22,8 +22,8 @@ class CPU {
   void executeCurrentInstruction() {
     final inst = getNextByte();
 
-    if (Instructions.opcodeToFunction[inst] != null) {
-      Instructions.opcodeToFunction[inst]!();
+    if (Instructions.opcodeToFunctionMap[inst] != null) {
+      Instructions.opcodeToFunctionMap[inst]!(this);
     } else {
       throw 'Unknown instruction: $inst';
     }

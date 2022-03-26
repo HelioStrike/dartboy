@@ -11,6 +11,7 @@ enum Register {
   H,
   L,
   // 16-bit registers
+  AF,
   BC,
   DE,
   HL,
@@ -32,6 +33,8 @@ extension RegisterExtension on Register {
 
   int get value {
     switch (this) {
+      case Register.AF:
+        return (_values[Register.A]! << 8) | _values[Register.F]!;
       case Register.BC:
         return (_values[Register.B]! << 8) | _values[Register.C]!;
       case Register.DE:
@@ -45,6 +48,10 @@ extension RegisterExtension on Register {
 
   set value(int val) {
     switch (this) {
+      case Register.AF:
+        _values[Register.A] = val >> 8;
+        _values[Register.F] = val & 255;
+        break;
       case Register.BC:
         _values[Register.B] = val >> 8;
         _values[Register.C] = val & 255;
@@ -72,5 +79,11 @@ extension RegisterExtension on Register {
 extension FlagExtension on Flag {
   bool get value {
     return (Register.F.value & (1 << (8 - index))) > 0;
+  }
+
+  set value(bool newValue) {
+    if (value != newValue) {
+      Register.F.value ^= (1 << (8 - index));
+    }
   }
 }

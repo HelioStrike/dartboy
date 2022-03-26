@@ -1,7 +1,5 @@
+import 'package:emulator/src/cpu/cpu.dart';
+import 'package:emulator/src/cpu/registers.dart';
+import 'package:emulator/src/memory/ram.dart';
+
 part 'instructions.g.dart';
-
-class Instructions {
-  static final Map<int, Function> opcodeToFunction = {0x00: _nop};
-
-  static void _nop() {}
-}
