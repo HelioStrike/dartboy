@@ -2,7 +2,6 @@ import 'dart:typed_data';
 
 class Cartridge {
   Cartridge(this.rom) {
-    print(getBytes(0x0100, 0x0103));
     entryPoint = getBytes(0x0100, 0x0103);
     nintendoLogo = getBytes(0x0104, 0x0133);
     title = getBytes(0x0134, 0x0143);

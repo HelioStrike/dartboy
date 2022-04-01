@@ -9,6 +9,7 @@ class CPU {
 
   void run() {
     RegisterExtension.reset();
+    Register.SP.value = 0xffee;
     // Actual ROM entry point.
     Register.PC.value = 0x0100;
 
@@ -34,6 +35,12 @@ class CPU {
   int getNextByte() {
     final ret = cartridge.getByte(Register.PC.value);
     Register.PC.value++;
+    return ret;
+  }
+
+  /// Returns the byte pointed to by the Program Counter (PC) plus a lookahead.
+  int peekByte(int lookAhead) {
+    final ret = cartridge.getByte(Register.PC.value + lookAhead);
     return ret;
   }
 }

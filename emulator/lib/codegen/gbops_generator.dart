@@ -10,6 +10,7 @@ class GbOpsGenerator extends Generator {
     final generatedCode = StringBuffer();
     generatedCode.write("class Instructions {");
     generateOpFunctionMap(generatedCode);
+    writeFlagAdjustFunctions(generatedCode);
     generatedCode.write("}");
     return generatedCode.toString();
   }
@@ -42,43 +43,63 @@ class GbOpsGenerator extends Generator {
     final op1 = getOperandCode(operation.operand1);
     final op2 = getOperandCode(operation.operand2);
 
-    print(opCell['Name']);
-
     switch (opName) {
       case 'NOP':
         break;
       case 'LD':
-        generatedCode.write('$op1 = $op2;');
+        final maybeResetNFlag =
+            (operation.operand2 == 'SP+i8') ? 'Flag.n.value = false;' : '';
+        generatedCode.write('$op1 = $op2; $maybeResetNFlag');
         break;
       case 'INC':
-        generatedCode.write('$op1++;');
+        generatedCode.write('''
+        $op1 = addWithFlagAdjust(${_cleanDestForAdjustFn(op1!)}, 1);
+        Flag.z.value = $op1 == 0;
+        Flag.n.value = false;
+        ''');
         break;
       case 'DEC':
-        generatedCode.write('$op1--;');
+        generatedCode.write('''
+        $op1 = subWithFlagAdjust(${_cleanDestForAdjustFn(op1!)}, 1);
+        Flag.z.value = $op1 == 0;
+        Flag.n.value = true;
+        ''');
         break;
       case 'RLCA':
         generatedCode.write('''
         Flag.c.value = (Register.A.value & 128) > 1;
         Register.A.value = (Register.A.value << 1) & 255;
         Register.A.value &= Flag.c.value ? 1 : 0;
+        Flag.n.value = false;
+        Flag.h.value = false;
         ''');
         break;
       case 'ADD':
-        generatedCode.write('$op1 += $op2;');
+        generatedCode.write('''
+        $op1 = addWithFlagAdjust(${_cleanDestForAdjustFn(op1!)}, $op2);
+        Flag.z.value = $op1 == 0;
+        Flag.n.value = false;
+        ''');
         break;
       case 'RRCA':
         generatedCode.write('''
         Flag.c.value = (Register.A.value & 1) > 1;
         Register.A.value = (Register.A.value >> 1) & 255;
         Register.A.value &= (Flag.c.value ? 1 : 0) << 7;
+        Flag.n.value = false;
+        Flag.h.value = false;
         ''');
         break;
       case 'STOP':
         break;
       case 'RLA':
         generatedCode.write('''
+        final highBit = (Register.A.value & 128) > 0;
         Register.A.value = (Register.A.value << 1) & 255;
         Register.A.value &= Flag.c.value ? 1 : 0;
+        Flag.c.value = highBit;
+        Flag.n.value = false;
+        Flag.h.value = false;
         ''');
         break;
       case 'JR':
@@ -94,14 +115,38 @@ class GbOpsGenerator extends Generator {
         break;
       case 'RRA':
         generatedCode.write('''
+        final lowBit = (Register.A.value & 1) > 0;
         Register.A.value = (Register.A.value >> 1) & 255;
         Register.A.value &= (Flag.c.value ? 1 : 0) << 7;
+        Flag.c.value = lowBit;
+        Flag.n.value = false;
+        Flag.h.value = false;
         ''');
         break;
       case 'DAA':
+        generatedCode.write('''
+        var correction = 0;
+
+        final low = Register.A.value & 0xf;
+        final high = (Register.A.value & 0xf0);
+
+        if (Flag.h.value || (!Flag.n.value && low > 0x09)) {
+          correction |= 6;
+        } else if (Flag.c.value || (!Flag.n.value && high > 0x99)) {
+          correction |= 0x60;
+          Flag.c.value = true;
+        }
+        Register.A.value += correction;
+        Flag.h.value = false;
+        Flag.z.value = Register.A.value == 0;
+        ''');
         break;
       case 'CPL':
-        generatedCode.write('Register.A.value ^= 255;');
+        generatedCode.write('''
+        Register.A.value ^= 255;
+        Flag.n.value = true;
+        Flag.h.value = true;
+        ''');
         break;
       case 'SCF':
         generatedCode.write('Flag.c.value = true;');
@@ -112,28 +157,56 @@ class GbOpsGenerator extends Generator {
       case 'HALT':
         break;
       case 'ADC':
-        generatedCode.write('$op1 += $op2 + (Flag.c.value ? 1: 0);');
+        generatedCode.write('''
+        $op1 = addWithFlagAdjust(${_cleanDestForAdjustFn(op1!)}, $op2 + (Flag.c.value ? 1 : 0));
+        Flag.z.value = $op1 == 0;
+        ''');
         break;
       case 'SUB':
-        generatedCode.write('Register.A.value -= $op1;');
+        generatedCode.write('''
+          Register.A.value = subWithFlagAdjust(Register.A, $op1);
+          Flag.z.value = Register.A.value == 0;
+          Flag.n.value = true;
+        ''');
         break;
       case 'SBC':
-        generatedCode.write('$op1 -= $op2 + (Flag.c.value ? 1: 0);');
+        generatedCode.write('''
+          $op1 = subWithFlagAdjust(${_cleanDestForAdjustFn(op1!)}, $op2 + (Flag.c.value ? 1 : 0));
+          Flag.z.value = $op1 == 0;
+          Flag.n.value = true;
+        ''');
         break;
       case 'AND':
-        generatedCode.write('$op1 &= $op2;');
+        generatedCode.write('''
+        $op1 &= $op2;
+        Flag.z.value = $op1 == 0;
+        Flag.n.value = false;
+        Flag.h.value = true;
+        ''');
         break;
       case 'XOR':
-        generatedCode.write('$op1 ^= $op2;');
+        generatedCode.write('''
+        $op1 ^= $op2;
+        Flag.z.value = $op1 == 0;
+        Flag.n.value = false;
+        Flag.h.value = false;
+        ''');
         break;
       case 'OR':
-        generatedCode.write('$op1 |= $op2;');
+        generatedCode.write('''
+        $op1 |= $op2;
+        Flag.z.value = $op1 == 0;
+        Flag.n.value = false;
+        Flag.h.value = false;
+        ''');
         break;
       case 'CP':
         generatedCode.write('''
         if ($op1 == $op2) {
-          Flag.c.value = true;
+          Flag.z.value = true;
         }
+        subWithFlagAdjust(${_cleanDestForAdjustFn(op1!)}, $op2);
+        Flag.n.value = true;
         ''');
         break;
       case 'RET':
@@ -220,6 +293,9 @@ class GbOpsGenerator extends Generator {
         Flag.c.value = ($op1 & 128) > 1;
         $op1 = ($op1 << 1) & 255;
         $op1 &= Flag.c.value ? 1 : 0;
+        Flag.z.value = $op1 == 0;
+        Flag.n.value = false;
+        Flag.h.value = false;
         ''');
         break;
       case 'RRC':
@@ -227,24 +303,40 @@ class GbOpsGenerator extends Generator {
         Flag.c.value = ($op1 & 1) > 1;
         $op1 = ($op1 >> 1) & 255;
         $op1 &= (Flag.c.value ? 1 : 0) << 7;
+        Flag.z.value = $op1 == 0;
+        Flag.n.value = false;
+        Flag.h.value = false;
         ''');
         break;
       case 'RL':
         generatedCode.write('''
+        final highBit = (Register.A.value & 128) > 0;
         $op1 = ($op1 << 1) & 255;
         $op1 &= Flag.c.value ? 1 : 0;
+        Flag.c.value = highBit;
+        Flag.z.value = $op1 == 0;
+        Flag.n.value = false;
+        Flag.h.value = false;
         ''');
         break;
       case 'RR':
         generatedCode.write('''
+        final lowBit = (Register.A.value & 1) > 0;
         $op1 = ($op1 >> 1) & 255;
         $op1 &= (Flag.c.value ? 1 : 0) << 7;
+        Flag.c.value = lowBit;
+        Flag.z.value = $op1 == 0;
+        Flag.n.value = false;
+        Flag.h.value = false;
         ''');
         break;
       case 'SLA':
         generatedCode.write('''
         Flag.c.value = ($op1 & 128) > 1;
         $op1 = ($op1 << 1) & 255;
+        Flag.z.value = $op1 == 0;
+        Flag.n.value = false;
+        Flag.h.value = false;
         ''');
         break;
       case 'SRA':
@@ -252,6 +344,8 @@ class GbOpsGenerator extends Generator {
         Flag.c.value = ($op1 & 1) > 1;
         final unchangedBit = $op1 & 128;
         $op1 = (($op1 >> 1) & 255) + unchangedBit;
+        Flag.z.value = $op1 == 0;
+        Flag.n.value = false;
         ''');
         break;
       case 'SWAP':
@@ -259,17 +353,22 @@ class GbOpsGenerator extends Generator {
         final low = $op1 & 255;
         $op1 >>= 4;
         $op1 = $op1 | (low << 4);
+        Flag.n.value = false;
+        Flag.h.value = false;
         ''');
         break;
       case 'SRL':
         generatedCode.write('''
         Flag.c.value = ($op1 & 1) > 1;
         $op1 = ($op1 >> 1) & 255;
+        Flag.z.value = $op1 == 0;
+        Flag.n.value = false;
         ''');
         break;
       case 'BIT':
         generatedCode.write('''
         Flag.z.value = ($op2 & (1 << $op1)) > 0;
+        Flag.n.value = false;
         ''');
         break;
       case 'RES':
@@ -285,10 +384,27 @@ class GbOpsGenerator extends Generator {
       default:
         throw 'Unknown operation: ${opCell['Name']}';
     }
+
+    // Debug info.
+    if (false) {
+      generatedCode.write('''
+        print('---------------------------------------');
+        print('${operation.name} ${op1 ?? ''}, ${op2 ?? ''}\\n');
+        print('${operation.length - 1} operands: ${operation.length > 1 ? '\${cpu.peekByte(0).toRadixString(16)}' : ''} ${operation.length > 2 ? '\${cpu.peekByte(1).toRadixString(16)}' : ''}\\n');  
+      
+        for (final register in Register.values) {
+          print('\${register.toString()} \${register.value}') ;
+        }
+        for (final flag in Flag.values) {
+          print('\${flag.toString()} \${flag.value}') ;
+        }
+      ''');
+    }
+
     generatedCode.write('},');
   }
   // ignore: todo
-  // TODO: STOP, DAA, HALT, RETI, DI, EI
+  // TODO: STOP, HALT, RETI, DI, EI
 
   /// Returns the C flag if the operator is the C register.
   ///
@@ -315,7 +431,7 @@ class GbOpsGenerator extends Generator {
     }
 
     final opCode = index.toRadixString(16).toString();
-    return Operation(opCode, opName, operand1, operand2);
+    return Operation(opCode, opName, operand1, operand2, opCell['Length']);
   }
 
   String? getOperandCode(String? operand) {
@@ -367,6 +483,79 @@ class GbOpsGenerator extends Generator {
     return op;
   }
 
+  void writeFlagAdjustFunctions(StringBuffer generatedCode) {
+    generatedCode.write('''
+    static int addWithFlagAdjust(dynamic dest, int b) {
+      late final int destBytes;
+      late final int a;
+
+      if (dest is Register) {
+        destBytes = dest.toString().split('Register.')[1].length > 1 ? 2 : 1;
+        a = dest.value;
+      } else if (dest is int) {
+        destBytes =  1;
+        a = dest;
+      } else {
+        throw Exception('Unexpected operand: \$dest');
+      }
+
+      int sum = a + b;
+      int lowerNibbleSum = (a & 0xf) + (b & 0xf);
+
+      if (destBytes == 1) {
+        if (sum > 0xff) {
+          Flag.c.value = true;
+        }
+      } else if (destBytes == 2) {
+        if (sum > 0xffff) {
+          Flag.c.value = true;
+        }
+      }
+
+      if (lowerNibbleSum > 0xf) {
+        Flag.h.value = true;
+      }
+
+      return (destBytes == 1 ? (sum & 0xff) : (sum & 0xffff));
+    }
+
+    static int subWithFlagAdjust(dynamic dest, int b) {
+      late final int destBytes;
+      late final int a;
+
+      if (dest is Register) {
+        destBytes = dest.toString().split('Register.')[1].length > 1 ? 2 : 1;
+        a = dest.value;
+      } else if (dest is int) {
+        destBytes =  1;
+        a = dest;
+      } else {
+        throw Exception('Unexpected operand: \$dest');
+      }
+
+      int sub = a - b;
+      int lowerNibbleSub = (a & 0xf) - (b & 0xf);
+
+      if (sub < 0) {
+        Flag.c.value = true;
+      }
+
+      if (lowerNibbleSub < 0) {
+        Flag.h.value = true;
+      }
+
+      return (destBytes == 1 ? (sub & 0xff) : (sub & 0xffff));
+    }
+    ''');
+  }
+
+  static String _cleanDestForAdjustFn(String dest) {
+    if (dest.startsWith('ram[')) {
+      return dest;
+    }
+    return dest.split('.value').join('');
+  }
+
   dynamic getGbOpsJson() {
     final jsonString = File('lib/data/gbops.json').readAsStringSync();
     return jsonDecode(jsonString);
@@ -374,10 +563,11 @@ class GbOpsGenerator extends Generator {
 }
 
 class Operation {
-  Operation(this.opCode, this.name, this.operand1, this.operand2);
+  Operation(this.opCode, this.name, this.operand1, this.operand2, this.length);
 
   final String opCode;
   final String name;
   final String? operand1;
   final String? operand2;
+  final int length;
 }

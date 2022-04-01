@@ -34,13 +34,13 @@ extension RegisterExtension on Register {
   int get value {
     switch (this) {
       case Register.AF:
-        return (_values[Register.A]! << 8) | _values[Register.F]!;
+        return _getValueFor16BitRegisters(Register.A, Register.F);
       case Register.BC:
-        return (_values[Register.B]! << 8) | _values[Register.C]!;
+        return _getValueFor16BitRegisters(Register.B, Register.C);
       case Register.DE:
-        return (_values[Register.D]! << 8) | _values[Register.E]!;
+        return _getValueFor16BitRegisters(Register.D, Register.E);
       case Register.HL:
-        return (_values[Register.H]! << 8) | _values[Register.L]!;
+        return _getValueFor16BitRegisters(Register.H, Register.L);
       default:
         return _values[this]!;
     }
@@ -49,24 +49,29 @@ extension RegisterExtension on Register {
   set value(int val) {
     switch (this) {
       case Register.AF:
-        _values[Register.A] = val >> 8;
-        _values[Register.F] = val & 255;
+        _setValueFor16BitRegisters(Register.A, Register.F, val);
         break;
       case Register.BC:
-        _values[Register.B] = val >> 8;
-        _values[Register.C] = val & 255;
+        _setValueFor16BitRegisters(Register.B, Register.C, val);
         break;
       case Register.DE:
-        _values[Register.D] = val >> 8;
-        _values[Register.E] = val & 255;
+        _setValueFor16BitRegisters(Register.D, Register.E, val);
         break;
       case Register.HL:
-        _values[Register.H] = val >> 8;
-        _values[Register.L] = val & 255;
+        _setValueFor16BitRegisters(Register.H, Register.L, val);
         break;
       default:
         _values[this] = val;
     }
+  }
+
+  int _getValueFor16BitRegisters(Register a, Register b) {
+    return (_values[a]! << 8) | _values[b]!;
+  }
+
+  void _setValueFor16BitRegisters(Register a, Register b, int val) {
+    _values[a] = (val >> 8) & 255;
+    _values[b] = val & 255;
   }
 
   static void reset() {
@@ -84,6 +89,12 @@ extension FlagExtension on Flag {
   set value(bool newValue) {
     if (value != newValue) {
       Register.F.value ^= (1 << (8 - index));
+    }
+  }
+
+  static void reset() {
+    for (var flag in Flag.values) {
+      flag.value = false;
     }
   }
 }
